@@ -1,10 +1,5 @@
 export const projects = [
   {
-    name: "randomizer-activities",
-    description: "An app to randomize weekend activities. Features user authentication and activity management.",
-    url: "https://activities-randomizer.bernardoserrano.com/"
-  },
-  {
     name: "met-gallery",
     description: "Explore art from the Metropolitan Museum of Art with a fun, teen-style roast feature.",
     url: "https://met.bernardoserrano.com/"
