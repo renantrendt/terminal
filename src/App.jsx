@@ -84,10 +84,11 @@ function App() {
       newOutput.push({ text: '  r + € n å n † r € n d † (2+option) (google - oogle) ∑ å ! l . com', type: 'system' })
     } else if (command === 'tips') {
       newOutput.push({ text: 'Game Tips and Secrets:', type: 'system' })
-      newOutput.push({ text: '  Type unlock___() in the console of the snake game to get something new', type: 'system' })
-      newOutput.push({ text: '  Type unlock___() in the console of the snake game to unlock something also else', type: 'system' })
-      newOutput.push({ text: '  Type set____() to get some cash cash', type: 'system' })
-      newOutput.push({ text: '  Type lootBox_________(\'Item Name\', \'rarity\', quantity); to unlock any items in ancient loot box game', type: 'system' })
+      newOutput.push({ text: '  unlockForTest() - in the console of the snake game to get something new', type: 'system' })
+      newOutput.push({ text: '  unlockHacker() - in the console of the snake game to unlock something also else', type: 'system' })
+      newOutput.push({ text: '  setmoney(amount) - to get some $$$ in the Doge clicker console', type: 'system' })
+      newOutput.push({ text: '  earn.some rainbow culture() - and get a really cool rainbow skin in snake game', type: 'system' })
+      newOutput.push({ text: '  lootBox_________(\'Item Name\', \'rarity\', quantity); - to unlock any items in ancient loot box game', type: 'system' })
     } else {
       // Check if command matches a project name
       const project = projects.find(p => p.name.toLowerCase() === command)
