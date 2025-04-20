@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { projects } from './data/projects'
+import { skills } from './data/skills'
 
 function App() {
   const [input, setInput] = useState('')
@@ -46,20 +47,41 @@ function App() {
       newOutput.push({ text: 'Available commands:', type: 'system' })
       newOutput.push({ text: '  help - show this super useful message🫠', type: 'system' })
       newOutput.push({ text: '  ls -la - List all projects', type: 'system' })
+      newOutput.push({ text: '  skills - Show my skill levels', type: 'system' })
       newOutput.push({ text: '  [project name] - Open the project URL', type: 'system' })
       newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
     } else if (command === 'ls -la') {
       newOutput.push({ text: 'Projects:', type: 'system' })
       projects.forEach(project => {
+        // Create a special object for project listings with clickable names
         newOutput.push({ 
-          text: `  ${project.name} - ${project.description}`, 
-          type: 'system' 
+          projectName: project.name,
+          projectUrl: project.url,
+          description: project.description,
+          type: 'project-listing'
         })
       })
     } else if (command === 'clear') {
       setInput('')
       setOutput([])
       return
+    } else if (command === 'skills') {
+      newOutput.push({ text: 'Skills:', type: 'system' })
+      skills.forEach(skill => {
+        // Create a progress bar using characters
+        const barLength = 40;
+        const filledLength = Math.round((skill.percentage / 100) * barLength);
+        const emptyLength = barLength - filledLength;
+        const progressBar = '█'.repeat(filledLength) + '░'.repeat(emptyLength);
+        
+        newOutput.push({ 
+          text: `  ${skill.name.padEnd(25)} ${progressBar} ${skill.percentage}%`, 
+          type: 'system' 
+        });
+      });
+    } else if (command === 'contact') {
+      newOutput.push({ text: 'Contact Information:', type: 'system' })
+      newOutput.push({ text: '  r + € n å n † r € n d † (2+option) (google - oogle) ∑ å ! l . com', type: 'system' })
     } else if (command === 'tips') {
       newOutput.push({ text: 'Game Tips and Secrets:', type: 'system' })
       newOutput.push({ text: '  Type unlock___() in the console of the snake game to get something new', type: 'system' })
@@ -95,11 +117,29 @@ function App() {
         <div className="terminal-title">terminal-folio</div>
       </div>
       <div className="terminal-content">
-        {output.map((line, index) => (
-          <div key={index} className={`terminal-line ${line.type}`}>
-            {line.text}
-          </div>
-        ))}
+        {output.map((line, index) => {
+          // Special rendering for project listings with clickable names
+          if (line.type === 'project-listing') {
+            return (
+              <div key={index} className="terminal-line system">
+                {'  '}
+                <span 
+                  className="project-link" 
+                  onClick={() => window.open(line.projectUrl, '_blank')}
+                >
+                  {line.projectName}
+                </span>
+                {' - ' + line.description}
+              </div>
+            );
+          }
+          // Regular line rendering
+          return (
+            <div key={index} className={`terminal-line ${line.type}`}>
+              {line.text}
+            </div>
+          );
+        })}
         <form onSubmit={handleSubmit} className="terminal-input-line">
           <span className="terminal-prompt">$</span>
           <input

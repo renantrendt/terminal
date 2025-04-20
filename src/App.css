@@ -107,6 +107,11 @@ body {
   color: var(--system-color);
 }
 
+.project-link {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .terminal-input-line {
   display: flex;
   align-items: center;
