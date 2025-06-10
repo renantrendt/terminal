@@ -5,101 +5,362 @@ import { skills } from './data/skills'
 
 function App() {
   const [input, setInput] = useState('')
-  const [output, setOutput] = useState([
-    { text: 'Welcome to Terminal Portfolio!', type: 'system' },
-    { text: 'Type "help" to see available commands.', type: 'system' }
-  ])
+  const [username, setUsername] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [output, setOutput] = useState([])
+  const [lastLogin, setLastLogin] = useState(null)
+  const [showSandwich, setShowSandwich] = useState(false)
+  const [commandHistory, setCommandHistory] = useState([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [audioEnabled, setAudioEnabled] = useState(false)
   const inputRef = useRef(null)
   const terminalRef = useRef(null)
+  const audioRef = useRef(null)
+  const typingTimeoutRef = useRef(null)
+
+  // localStorage utility functions
+  const saveUserData = (user, loginTime) => {
+    localStorage.setItem('terminal_username', user)
+    localStorage.setItem('terminal_last_login', loginTime.toISOString())
+  }
+
+  const loadUserData = () => {
+    const savedUsername = localStorage.getItem('terminal_username')
+    const savedLastLogin = localStorage.getItem('terminal_last_login')
+    const savedHistory = localStorage.getItem('terminal_command_history')
+    return {
+      username: savedUsername,
+      lastLogin: savedLastLogin ? new Date(savedLastLogin) : null,
+      commandHistory: savedHistory ? JSON.parse(savedHistory) : []
+    }
+  }
+
+  const clearUserData = () => {
+    localStorage.removeItem('terminal_username')
+    localStorage.removeItem('terminal_last_login')
+    localStorage.removeItem('terminal_command_history')
+  }
+
+  const saveCommandHistory = (history) => {
+    localStorage.setItem('terminal_command_history', JSON.stringify(history))
+  }
 
   useEffect(() => {
+    // Check for existing user on mount
+    const userData = loadUserData()
+    if (userData.username) {
+      setUsername(userData.username)
+      setIsLoggedIn(true)
+      setLastLogin(userData.lastLogin)
+      setCommandHistory(userData.commandHistory)
+      setOutput([
+        { text: 'Welcome to Terminal Portfolio!', type: 'system' },
+        { text: 'Type "help" to see available commands.', type: 'system' }
+      ])
+    } else {
+      setOutput([
+        { text: 'Welcome to Terminal Portfolio!', type: 'system' },
+        { text: 'Please login to continue.', type: 'system' },
+        { text: 'Usage: login [username]', type: 'system' }
+      ])
+    }
+
     // Focus input when component mounts
     inputRef.current.focus()
-    
+  }, [])
+
+  useEffect(() => {
     // Keep terminal scrolled to bottom
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight
     }
   }, [output])
+
+  useEffect(() => {
+    // Cleanup typing sound and timeout on unmount
+    return () => {
+      stopTypingSound()
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
+  }, [])
   
   // Function to focus on the input field
   const focusInput = () => {
     if (inputRef.current) {
       inputRef.current.focus()
     }
+    // Initialize audio on first interaction
+    initializeAudio()
+  }
+
+  // Function to format the last login time
+  const formatLastLogin = (date) => {
+    if (!date) return null
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    const dayName = days[date.getDay()]
+    const monthName = months[date.getMonth()]
+    const day = date.getDate().toString().padStart(2, ' ')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    const seconds = date.getSeconds().toString().padStart(2, '0')
+    
+    return `${dayName} ${monthName} ${day} ${hours}:${minutes}:${seconds}`
+  }
+
+  // Initialize audio on first user interaction
+  const initializeAudio = () => {
+    if (audioRef.current && !audioEnabled) {
+      console.log('Initializing audio')
+      // Try to play and immediately pause to enable audio context
+      audioRef.current.play().then(() => {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+        setAudioEnabled(true)
+        console.log('Audio enabled successfully')
+      }).catch(e => {
+        console.log('Audio initialization failed:', e)
+      })
+    }
+  }
+
+  // Typing sound functions
+  const startTypingSound = () => {
+    if (audioRef.current && audioEnabled && audioRef.current.paused) {
+      console.log('🔊 Starting typing sound')
+      audioRef.current.currentTime = 0
+      audioRef.current.loop = true
+      audioRef.current.volume = 0.3 // Lower volume
+      const playPromise = audioRef.current.play()
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('✅ Typing sound playing')
+          })
+          .catch(e => {
+            console.log('❌ Audio play failed:', e)
+          })
+      }
+    } else if (!audioEnabled) {
+      console.log('🎵 Audio not enabled yet - trying to initialize')
+      initializeAudio()
+    }
+  }
+
+  const stopTypingSound = () => {
+    if (audioRef.current && !audioRef.current.paused) {
+      console.log('⏹️ Stopping typing sound')
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
   }
 
   const handleInputChange = (e) => {
     setInput(e.target.value)
+    // Reset history index when user starts typing
+    setHistoryIndex(-1)
+    
+    // Handle typing sounds
+    if (audioRef.current && audioEnabled && audioRef.current.paused) {
+      startTypingSound()
+    }
+    
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    
+    // Set timeout to stop sound when user stops typing
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTypingSound()
+    }, 500) // Stop sound 500ms after last keystroke (longer delay)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      // Stop typing sound for navigation
+      stopTypingSound()
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+        const newIndex = historyIndex + 1
+        setHistoryIndex(newIndex)
+        setInput(commandHistory[commandHistory.length - 1 - newIndex])
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      // Stop typing sound for navigation
+      stopTypingSound()
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (historyIndex > 0) {
+        const newIndex = historyIndex - 1
+        setHistoryIndex(newIndex)
+        setInput(commandHistory[commandHistory.length - 1 - newIndex])
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1)
+        setInput('')
+      }
+    } else if (e.key === 'Enter') {
+      // Enter is handled by form submit, just stop typing sound
+      stopTypingSound()
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
     
+    // Stop typing sound when command is submitted
+    stopTypingSound()
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    
+    const promptSymbol = isLoggedIn ? `[${username}] ~ %` : '$'
     // Add user input to output
-    const newOutput = [...output, { text: `$ ${input}`, type: 'command' }]
+    const newOutput = [...output, { text: `${promptSymbol} ${input}`, type: 'command' }]
+    
+    // Add command to history (if not empty and not just spaces)
+    if (input.trim()) {
+      const newHistory = [...commandHistory, input.trim()]
+      setCommandHistory(newHistory)
+      saveCommandHistory(newHistory)
+    }
+    // Reset history index
+    setHistoryIndex(-1)
     
     // Process command
     const command = input.trim().toLowerCase()
-    const args = command.split(' ')
+    const args = input.trim().split(' ')
     
-    if (command === 'help') {
-      newOutput.push({ text: 'Available commands:', type: 'system' })
-      newOutput.push({ text: '  help - show this super useful message🫠', type: 'system' })
-      newOutput.push({ text: '  ls -la - List all projects', type: 'system' })
-      newOutput.push({ text: '  skills - Show my skill levels (100% true. Trust💀)', type: 'system' })
-      newOutput.push({ text: '  [project name] - Open the project URL', type: 'system' })
-      newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
-    } else if (command === 'ls -la') {
-      newOutput.push({ text: 'Projects:', type: 'system' })
-      projects.forEach(project => {
-        // Create a special object for project listings with clickable names
-        newOutput.push({ 
-          projectName: project.name,
-          projectUrl: project.url,
-          description: project.description,
-          type: 'project-listing'
-        })
-      })
-    } else if (command === 'clear') {
-      setInput('')
-      setOutput([])
-      return
-    } else if (command === 'skills') {
-      newOutput.push({ text: 'Skills:', type: 'system' })
-      skills.forEach(skill => {
-        // Create a progress bar using characters
-        const barLength = 40;
-        const filledLength = Math.round((skill.percentage / 100) * barLength);
-        const emptyLength = barLength - filledLength;
-        const progressBar = '█'.repeat(filledLength) + '░'.repeat(emptyLength);
-        
-        newOutput.push({ 
-          text: `  ${skill.name.padEnd(25)} ${progressBar} ${skill.percentage}%`, 
-          type: 'system' 
-        });
-      });
-    } else if (command === 'contact') {
-      newOutput.push({ text: 'Contact Information:', type: 'system' })
-      newOutput.push({ text: '  r + € n å n † r € n d † (2 + shift) (Google - oogle) ∑ å ! l . com', type: 'system' })
-    } else if (command === 'tips') {
-      newOutput.push({ text: 'Game Tips and Secrets:', type: 'system' })
-      newOutput.push({ text: '  unlockForTest() - in the console of the snake game to get something new', type: 'system' })
-      newOutput.push({ text: '  unlockHacker() - in the console of the snake game to unlock something else new', type: 'system' })
-      newOutput.push({ text: '  setmoney(amount) - to get some $$$ in the Doge clicker console', type: 'system' })
-      newOutput.push({ text: '  earn.some rainbow culture() - and get a really cool rainbow skin in snake game', type: 'system' })
-      newOutput.push({ text: '  lootBoxConsole.addItem("name", "rarity ", #);- to unlock any items in ancient loot box game', type: 'system' })
-    } else {
-      // Check if command matches a project name
-      const project = projects.find(p => p.name.toLowerCase() === command)
-      if (project) {
-        newOutput.push({ text: `Opening ${project.name}...`, type: 'system' })
-        window.open(project.url, '_blank')
+    // Handle login command when not logged in
+    if (!isLoggedIn) {
+      if (args[0].toLowerCase() === 'login') {
+        if (args.length < 2 || !args[1]) {
+          newOutput.push({ text: 'Can you not read the "help"?? Go to school lil buddy', type: 'error' })
+        } else if (args[1].length > 10) {
+          newOutput.push({ text: 'Username must be 10 characters or less', type: 'error' })
+        } else {
+          const newUsername = args[1]
+          const loginTime = new Date()
+          setUsername(newUsername)
+          setIsLoggedIn(true)
+          setLastLogin(loginTime)
+          saveUserData(newUsername, loginTime)
+          newOutput.push({ text: `Welcome, ${newUsername}!`, type: 'system' })
+          newOutput.push({ text: 'Type "help" to see available commands.', type: 'system' })
+        }
       } else {
-        newOutput.push({ 
-          text: `Command not found: ${command}. Type "help" for available commands.`, 
-          type: 'error' 
+        newOutput.push({ text: 'Please login first. Usage: login [username]', type: 'error' })
+      }
+    } else {
+      // Update last login time when user submits input (if logged in)
+      const currentTime = new Date()
+      setLastLogin(currentTime)
+      saveUserData(username, currentTime)
+      
+      // Handle regular commands when logged in
+      if (command === 'sudo make me a sandwich' || input.trim().toLowerCase() === 'sudo make me a sandwich') {
+        newOutput.push({ text: 'Okay.', type: 'system' })
+        setShowSandwich(true)
+        // Hide sandwich after 4 seconds
+        setTimeout(() => {
+          setShowSandwich(false)
+        }, 4000)
+      } else if (command === 'help') {
+        newOutput.push({ text: 'Available commands:', type: 'system' })
+        newOutput.push({ text: '  help - show this super useful message🫠', type: 'system' })
+        newOutput.push({ text: '  ls -la - List all projects', type: 'system' })
+        newOutput.push({ text: '  skills - Show my skill levels (100% true. Trust💀)', type: 'system' })
+        newOutput.push({ text: '  [project name] - Open the project URL', type: 'system' })
+        newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
+        newOutput.push({ text: '  login [username] - Login with a username', type: 'system' })
+        newOutput.push({ text: '  logout - Logout and clear user data', type: 'system' })
+        newOutput.push({ text: '  history - Show command history', type: 'system' })
+        newOutput.push({ text: '  welcome - Show welcome message', type: 'system' })
+      } else if (command === 'welcome') {
+        newOutput.push({ text: 'Welcome to Terminal Portfolio!', type: 'system' })
+        newOutput.push({ text: 'Type "help" to see available commands.', type: 'system' })
+      } else if (command === 'history') {
+        if (commandHistory.length === 0) {
+          newOutput.push({ text: 'No command history yet.', type: 'system' })
+        } else {
+          newOutput.push({ text: 'Command History:', type: 'system' })
+          commandHistory.forEach((cmd, index) => {
+            newOutput.push({ text: `  ${(index + 1).toString().padStart(3, ' ')}: ${cmd}`, type: 'system' })
+          })
+        }
+      } else if (command === 'logout') {
+        clearUserData()
+        setUsername('')
+        setIsLoggedIn(false)
+        setLastLogin(null)
+        setCommandHistory([])
+        setHistoryIndex(-1)
+        newOutput.push({ text: 'Logged out successfully.', type: 'system' })
+        newOutput.push({ text: 'Please login to continue.', type: 'system' })
+        newOutput.push({ text: 'Usage: login [username]', type: 'system' })
+      } else if (command === 'ls -la') {
+        newOutput.push({ text: 'Projects:', type: 'system' })
+        projects.forEach(project => {
+          // Create a special object for project listings with clickable names
+          newOutput.push({ 
+            projectName: project.name,
+            projectUrl: project.url,
+            description: project.description,
+            type: 'project-listing'
+          })
         })
+      } else if (command === 'clear') {
+        setInput('')
+        setOutput([])
+        return
+      } else if (command === 'skills') {
+        newOutput.push({ text: 'Skills:', type: 'system' })
+        skills.forEach(skill => {
+          // Create a progress bar using characters
+          const barLength = 40;
+          const filledLength = Math.round((skill.percentage / 100) * barLength);
+          const emptyLength = barLength - filledLength;
+          const progressBar = '█'.repeat(filledLength) + '░'.repeat(emptyLength);
+          
+          newOutput.push({ 
+            text: `  ${skill.name.padEnd(25)} ${progressBar} ${skill.percentage}%`, 
+            type: 'system' 
+          });
+        });
+      } else if (command === 'contact') {
+        newOutput.push({ text: 'Contact Information:', type: 'system' })
+        newOutput.push({ text: '  r + € n å n † r € n d † (2 + shift) (Google - oogle) ∑ å ! l . com', type: 'system' })
+      } else if (command === 'tips') {
+        newOutput.push({ text: 'Game Tips and Secrets:', type: 'system' })
+        newOutput.push({ text: '  unlockForTest() - in the console of the snake game to get something new', type: 'system' })
+        newOutput.push({ text: '  unlockHacker() - in the console of the snake game to unlock something else new', type: 'system' })
+        newOutput.push({ text: '  setmoney(amount) - to get some $$$ in the Doge clicker console', type: 'system' })
+        newOutput.push({ text: '  earn.some rainbow culture() - and get a really cool rainbow skin in snake game', type: 'system' })
+        newOutput.push({ text: '  lootBoxConsole.addItem("name", "rarity ", #);- to unlock any items in ancient loot box game', type: 'system' })
+      } else {
+        // Check if command matches a project name
+        const project = projects.find(p => p.name.toLowerCase() === command)
+        if (project) {
+          newOutput.push({ text: `Opening ${project.name}...`, type: 'system' })
+          window.open(project.url, '_blank')
+        } else {
+          newOutput.push({ 
+            text: `Command not found: ${input.trim()}. Type "help" for available commands.`, 
+            type: 'error' 
+          })
+        }
       }
     }
     
@@ -116,6 +377,11 @@ function App() {
           <div className="terminal-button maximize"></div>
         </div>
         <div className="terminal-title">terminal-folio</div>
+        {lastLogin && isLoggedIn && (
+          <div className="last-login">
+            Last login: {formatLastLogin(lastLogin)}
+          </div>
+        )}
       </div>
       <div className="terminal-content">
         {output.map((line, index) => {
@@ -142,17 +408,46 @@ function App() {
           );
         })}
         <form onSubmit={handleSubmit} className="terminal-input-line">
-          <span className="terminal-prompt">$</span>
+          <span className="terminal-prompt">
+            {isLoggedIn ? `[${username}] ~ %` : '$'}
+          </span>
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => {
+              initializeAudio()
+            }}
+            onBlur={() => {
+              stopTypingSound()
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current)
+              }
+            }}
             className="terminal-input"
             autoFocus
           />
         </form>
       </div>
+      {showSandwich && (
+        <div className="sandwich-overlay">
+          <div className="sandwich-comic">
+            <img src="sandwich.png" alt="sudo sandwich comic" className="sandwich-image" />
+          </div>
+        </div>
+      )}
+      <audio 
+        ref={audioRef} 
+        preload="auto" 
+        muted={false}
+        onLoadedData={() => console.log('Audio loaded successfully')}
+        onError={(e) => console.log('Audio loading error:', e)}
+      >
+        <source src="typing.mp3" type="audio/mpeg" />
+        Your browser does not support the audio element.
+      </audio>
     </div>
   )
 }
