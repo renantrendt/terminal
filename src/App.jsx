@@ -46,6 +46,7 @@ function App() {
   }
 
   useEffect(() => {
+    console.log('🚀 Component mounted')
     // Check for existing user on mount
     const userData = loadUserData()
     if (userData.username) {
@@ -67,6 +68,7 @@ function App() {
 
     // Focus input when component mounts
     inputRef.current.focus()
+    console.log('🎯 Input focused on mount')
   }, [])
 
   useEffect(() => {
@@ -88,6 +90,7 @@ function App() {
   
   // Function to focus on the input field
   const focusInput = () => {
+    console.log('🎯 focusInput called')
     if (inputRef.current) {
       inputRef.current.focus()
     }
@@ -113,24 +116,37 @@ function App() {
 
   // Initialize audio on first user interaction
   const initializeAudio = () => {
+    console.log('🎵 initializeAudio called')
+    console.log('🎵 audioRef.current:', !!audioRef.current)
+    console.log('🎵 audioEnabled:', audioEnabled)
+    
     if (audioRef.current && !audioEnabled) {
-      console.log('Initializing audio')
+      console.log('🎵 Starting audio initialization...')
       // Try to play and immediately pause to enable audio context
       audioRef.current.play().then(() => {
         audioRef.current.pause()
         audioRef.current.currentTime = 0
         setAudioEnabled(true)
-        console.log('Audio enabled successfully')
+        console.log('✅ Audio enabled successfully!')
       }).catch(e => {
-        console.log('Audio initialization failed:', e)
+        console.log('❌ Audio initialization failed:', e)
       })
+    } else if (audioEnabled) {
+      console.log('🎵 Audio already enabled')
+    } else {
+      console.log('❌ No audio ref available')
     }
   }
 
   // Typing sound functions
   const startTypingSound = () => {
+    console.log('🔊 startTypingSound called')
+    console.log('🔊 audioRef.current:', !!audioRef.current)
+    console.log('🔊 audioEnabled:', audioEnabled)
+    console.log('🔊 audio paused:', audioRef.current ? audioRef.current.paused : 'no audio')
+    
     if (audioRef.current && audioEnabled && audioRef.current.paused) {
-      console.log('🔊 Starting typing sound')
+      console.log('🔊 All conditions met - starting sound...')
       audioRef.current.currentTime = 0
       audioRef.current.loop = true
       audioRef.current.volume = 0.3 // Lower volume
@@ -139,7 +155,7 @@ function App() {
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log('✅ Typing sound playing')
+            console.log('✅ Typing sound playing successfully!')
           })
           .catch(e => {
             console.log('❌ Audio play failed:', e)
@@ -148,6 +164,8 @@ function App() {
     } else if (!audioEnabled) {
       console.log('🎵 Audio not enabled yet - trying to initialize')
       initializeAudio()
+    } else {
+      console.log('❌ Conditions not met for starting sound')
     }
   }
 
@@ -160,13 +178,22 @@ function App() {
   }
 
   const handleInputChange = (e) => {
+    console.log('⌨️ handleInputChange called with:', e.target.value)
     setInput(e.target.value)
     // Reset history index when user starts typing
     setHistoryIndex(-1)
     
     // Handle typing sounds
+    console.log('⌨️ Checking conditions for typing sound...')
+    console.log('⌨️ audioRef.current:', !!audioRef.current)
+    console.log('⌨️ audioEnabled:', audioEnabled)
+    console.log('⌨️ audio paused:', audioRef.current ? audioRef.current.paused : 'no audio')
+    
     if (audioRef.current && audioEnabled && audioRef.current.paused) {
+      console.log('⌨️ Conditions met - calling startTypingSound')
       startTypingSound()
+    } else {
+      console.log('⌨️ Conditions not met for typing sound')
     }
     
     // Clear previous timeout
@@ -176,6 +203,7 @@ function App() {
     
     // Set timeout to stop sound when user stops typing
     typingTimeoutRef.current = setTimeout(() => {
+      console.log('⏰ Timeout reached - stopping sound')
       stopTypingSound()
     }, 500) // Stop sound 500ms after last keystroke (longer delay)
   }
@@ -369,7 +397,10 @@ function App() {
   }
 
   return (
-    <div className="terminal" ref={terminalRef} onClick={focusInput}>
+    <div className="terminal" ref={terminalRef} onClick={() => {
+      console.log('🖱️ Terminal clicked')
+      focusInput()
+    }}>
       <div className="terminal-header">
         <div className="terminal-buttons">
           <div className="terminal-button close"></div>
@@ -418,6 +449,7 @@ function App() {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onFocus={() => {
+              console.log('🎯 Input focused - calling initializeAudio')
               initializeAudio()
             }}
             onBlur={() => {
@@ -442,8 +474,11 @@ function App() {
         ref={audioRef} 
         preload="auto" 
         muted={false}
-        onLoadedData={() => console.log('Audio loaded successfully')}
-        onError={(e) => console.log('Audio loading error:', e)}
+        onLoadedData={() => console.log('🎵 Audio loaded successfully')}
+        onCanPlay={() => console.log('🎵 Audio can play')}
+        onError={(e) => console.log('❌ Audio loading error:', e)}
+        onPlay={() => console.log('▶️ Audio started playing')}
+        onPause={() => console.log('⏸️ Audio paused')}
       >
         <source src="typing.mp3" type="audio/mpeg" />
         Your browser does not support the audio element.
