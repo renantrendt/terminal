@@ -114,23 +114,33 @@ function App() {
     return `${dayName} ${monthName} ${day} ${hours}:${minutes}:${seconds}`
   }
 
-  // Initialize audio on first user interaction
+  // Initialize audio on first user interaction (following Chrome's autoplay policy)
   const initializeAudio = () => {
     console.log('🎵 initializeAudio called')
     console.log('🎵 audioRef.current:', !!audioRef.current)
     console.log('🎵 audioEnabled:', audioEnabled)
     
     if (audioRef.current && !audioEnabled) {
-      console.log('🎵 Starting audio initialization...')
-      // Try to play and immediately pause to enable audio context
-      audioRef.current.play().then(() => {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-        setAudioEnabled(true)
-        console.log('✅ Audio enabled successfully!')
-      }).catch(e => {
-        console.log('❌ Audio initialization failed:', e)
-      })
+      console.log('🎵 Starting audio initialization with user gesture...')
+      
+      // Set volume first
+      audioRef.current.volume = 0.3
+      
+      // Try to play briefly to unlock audio context (Chrome autoplay policy requirement)
+      const playPromise = audioRef.current.play()
+      
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          console.log('✅ Audio unlocked with user gesture!')
+          // Immediately pause and reset for future use
+          audioRef.current.pause()
+          audioRef.current.currentTime = 0
+          setAudioEnabled(true)
+        }).catch(e => {
+          console.log('❌ Audio unlock failed:', e)
+          console.log('This is likely due to insufficient user gesture')
+        })
+      }
     } else if (audioEnabled) {
       console.log('🎵 Audio already enabled')
     } else {
@@ -183,6 +193,12 @@ function App() {
     // Reset history index when user starts typing
     setHistoryIndex(-1)
     
+    // Typing is a user gesture - try to enable audio if not already enabled
+    if (!audioEnabled && audioRef.current) {
+      console.log('⌨️ Typing detected - attempting to unlock audio')
+      initializeAudio()
+    }
+    
     // Handle typing sounds
     console.log('⌨️ Checking conditions for typing sound...')
     console.log('⌨️ audioRef.current:', !!audioRef.current)
@@ -192,6 +208,8 @@ function App() {
     if (audioRef.current && audioEnabled && audioRef.current.paused) {
       console.log('⌨️ Conditions met - calling startTypingSound')
       startTypingSound()
+    } else if (!audioEnabled) {
+      console.log('⌨️ Audio not enabled yet - will try on next keystroke')
     } else {
       console.log('⌨️ Conditions not met for typing sound')
     }
@@ -314,20 +332,6 @@ function App() {
         newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
         newOutput.push({ text: '  login [username] - Login with a username', type: 'system' })
         newOutput.push({ text: '  logout - Logout and clear user data', type: 'system' })
-        newOutput.push({ text: '  history - Show command history', type: 'system' })
-        newOutput.push({ text: '  welcome - Show welcome message', type: 'system' })
-      } else if (command === 'welcome') {
-        newOutput.push({ text: 'Welcome to Terminal Portfolio!', type: 'system' })
-        newOutput.push({ text: 'Type "help" to see available commands.', type: 'system' })
-      } else if (command === 'history') {
-        if (commandHistory.length === 0) {
-          newOutput.push({ text: 'No command history yet.', type: 'system' })
-        } else {
-          newOutput.push({ text: 'Command History:', type: 'system' })
-          commandHistory.forEach((cmd, index) => {
-            newOutput.push({ text: `  ${(index + 1).toString().padStart(3, ' ')}: ${cmd}`, type: 'system' })
-          })
-        }
       } else if (command === 'logout') {
         clearUserData()
         setUsername('')
@@ -397,8 +401,13 @@ function App() {
   }
 
   return (
-    <div className="terminal" ref={terminalRef} onClick={() => {
-      console.log('🖱️ Terminal clicked')
+    <div className="terminal" ref={terminalRef} onClick={(e) => {
+      console.log('🖱️ Terminal clicked - this is a USER GESTURE')
+      // Ensure audio is initialized with this user gesture
+      if (!audioEnabled) {
+        console.log('🎵 Attempting to unlock audio with click gesture')
+        initializeAudio()
+      }
       focusInput()
     }}>
       <div className="terminal-header">
@@ -413,6 +422,14 @@ function App() {
             Last login: {formatLastLogin(lastLogin)}
           </div>
         )}
+        <div className="audio-status" onClick={() => {
+          console.log('🔊 Audio status clicked')
+          if (!audioEnabled) {
+            initializeAudio()
+          }
+        }}>
+          {audioEnabled ? '🔊' : '🔇'} {audioEnabled ? 'Sound ON' : 'Click to enable sound'}
+        </div>
       </div>
       <div className="terminal-content">
         {output.map((line, index) => {

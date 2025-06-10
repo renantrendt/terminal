@@ -83,11 +83,29 @@ body {
 .last-login {
   position: absolute;
   right: 10px;
+  top: 0;
   color: var(--border-color);
   font-size: 12px;
   font-family: 'Fira Code', monospace;
   opacity: 0.8;
   z-index: 10;
+}
+
+.audio-status {
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  color: var(--border-color);
+  font-size: 10px;
+  font-family: 'Fira Code', monospace;
+  opacity: 0.6;
+  z-index: 10;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.audio-status:hover {
+  opacity: 1;
 }
 
 .terminal-content {
