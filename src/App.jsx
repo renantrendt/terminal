@@ -47,7 +47,7 @@ function App() {
       newOutput.push({ text: 'Available commands:', type: 'system' })
       newOutput.push({ text: '  help - show this super useful message🫠', type: 'system' })
       newOutput.push({ text: '  ls -la - List all projects', type: 'system' })
-      newOutput.push({ text: '  skills - Show my skill levels', type: 'system' })
+      newOutput.push({ text: '  skills - Show my skill levels (100% true. Trust💀)', type: 'system' })
       newOutput.push({ text: '  [project name] - Open the project URL', type: 'system' })
       newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
     } else if (command === 'ls -la') {
