@@ -13,6 +13,8 @@ function App() {
   const [commandHistory, setCommandHistory] = useState([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [audioEnabled, setAudioEnabled] = useState(false)
+  const [showMatrix, setShowMatrix] = useState(false)
+  const [showExitText, setShowExitText] = useState(true)
   const inputRef = useRef(null)
   const terminalRef = useRef(null)
   const audioRef = useRef(null)
@@ -87,6 +89,35 @@ function App() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    // Global ESC key listener for Matrix
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape' && showMatrix) {
+        console.log('Global ESC - closing Matrix')
+        setShowMatrix(false)
+        setShowExitText(true) // Reset exit text for next time
+      }
+    }
+
+    if (showMatrix) {
+      document.addEventListener('keydown', handleEscKey)
+      
+      // Hide "Press ESC to exit" text after 6 seconds
+      const exitTextTimer = setTimeout(() => {
+        setShowExitText(false)
+      }, 6000)
+      
+      return () => {
+        document.removeEventListener('keydown', handleEscKey)
+        clearTimeout(exitTextTimer)
+      }
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey)
+    }
+  }, [showMatrix])
   
   // Function to focus on the input field
   const focusInput = () => {
@@ -227,6 +258,13 @@ function App() {
   }
 
   const handleKeyDown = (e) => {
+    // Handle ESC key to close Matrix
+    if (e.key === 'Escape' && showMatrix) {
+      console.log('ESC pressed - closing Matrix')
+      setShowMatrix(false)
+      return
+    }
+
     if (e.key === 'ArrowUp') {
       e.preventDefault()
       // Stop typing sound for navigation
@@ -316,7 +354,12 @@ function App() {
       saveUserData(username, currentTime)
       
       // Handle regular commands when logged in
-      if (command === 'sudo make me a sandwich' || input.trim().toLowerCase() === 'sudo make me a sandwich') {
+      if (command === 'cd matrix && npm run dev') {
+        newOutput.push({ text: 'Initializing Matrix...', type: 'system' })
+        newOutput.push({ text: 'Welcome to the Matrix', type: 'system' })
+        setShowMatrix(true)
+        setShowExitText(true) // Reset exit text when Matrix starts
+      } else if (command === 'sudo make me a sandwich' || input.trim().toLowerCase() === 'sudo make me a sandwich') {
         newOutput.push({ text: 'Okay.', type: 'system' })
         setShowSandwich(true)
         // Hide sandwich after 4 seconds
@@ -484,6 +527,41 @@ function App() {
         <div className="sandwich-overlay">
           <div className="sandwich-comic">
             <img src="sandwich.png" alt="sudo sandwich comic" className="sandwich-image" />
+          </div>
+        </div>
+      )}
+      {showMatrix && (
+        <div className="matrix-overlay">
+          <div className="matrix-container">
+            {Array.from({ length: 80 }, (_, i) => (
+              <div key={i} className="matrix-column" style={{ left: `${i * 1.5}%` }}>
+                {Array.from({ length: 50 }, (_, j) => (
+                  <span key={j} className="matrix-char" style={{ 
+                    animationDelay: `${Math.random() * 3}s`,
+                    animationDuration: `${0.8 + Math.random() * 1.5}s`
+                  }}>
+                    {'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン01010101'[Math.floor(Math.random() * 80)]}
+                  </span>
+                ))}
+              </div>
+            ))}
+            <div className="matrix-text">
+              <div className="falling-text">
+                {"Welcome to the Matrix".split('').map((char, index) => (
+                  <span 
+                    key={index} 
+                    className="falling-letter"
+                    style={{ 
+                      animationDelay: `${index * 1}s`,
+                      left: `${index * 20}px`
+                    }}
+                  >
+                    {char === ' ' ? '\u00A0' : char}
+                  </span>
+                ))}
+              </div>
+              {showExitText && <div className="exit-text">Press ESC to exit</div>}
+            </div>
           </div>
         </div>
       )}
