@@ -91,17 +91,33 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // Global ESC key listener for Matrix
-    const handleEscKey = (e) => {
-      if (e.key === 'Escape' && showMatrix) {
-        console.log('Global ESC - closing Matrix')
-        setShowMatrix(false)
-        setShowExitText(true) // Reset exit text for next time
+    // Matrix key handlers for game controls and exit
+    const handleMatrixKeys = (e) => {
+      if (showMatrix) {
+        console.log(`Matrix key pressed: ${e.key}`)
+        
+        if (e.key === 'Escape') {
+          console.log('ESC - closing Matrix')
+          setShowMatrix(false)
+          setShowExitText(true) // Reset exit text for next time
+          return
+        }
+        
+        // WASD game controls - prevent default to stop any input interference
+        if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+          e.preventDefault()
+          console.log(`WASD pressed: ${e.key} - ready for game logic!`)
+          // TODO: Add your game logic here
+          // Example: handleGameMovement(e.key)
+        }
+        
+        // Prevent any other keys from doing terminal stuff while in matrix
+        e.preventDefault()
       }
     }
 
     if (showMatrix) {
-      document.addEventListener('keydown', handleEscKey)
+      document.addEventListener('keydown', handleMatrixKeys)
       
       // Hide "Press ESC to exit" text after 6 seconds
       const exitTextTimer = setTimeout(() => {
@@ -109,13 +125,13 @@ function App() {
       }, 6000)
       
       return () => {
-        document.removeEventListener('keydown', handleEscKey)
+        document.removeEventListener('keydown', handleMatrixKeys)
         clearTimeout(exitTextTimer)
       }
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscKey)
+      document.removeEventListener('keydown', handleMatrixKeys)
     }
   }, [showMatrix])
   
@@ -451,7 +467,10 @@ function App() {
         console.log('🎵 Attempting to unlock audio with click gesture')
         initializeAudio()
       }
-      focusInput()
+      // Don't focus input when in matrix mode
+      if (!showMatrix) {
+        focusInput()
+      }
     }}>
       <div className="terminal-header">
         <div className="terminal-buttons">
@@ -520,6 +539,7 @@ function App() {
             }}
             className="terminal-input"
             autoFocus
+            disabled={showMatrix}
           />
         </form>
       </div>

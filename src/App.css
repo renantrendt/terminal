@@ -287,6 +287,11 @@ body {
   flex-grow: 1;
 }
 
+.terminal-input:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 /* Sandwich Comic Overlay */
 .sandwich-overlay {
   position: absolute;
