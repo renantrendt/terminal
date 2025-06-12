@@ -15,10 +15,54 @@ function App() {
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [showMatrix, setShowMatrix] = useState(false)
   const [showExitText, setShowExitText] = useState(true)
+  const [phillQuotes, setPhillQuotes] = useState([])
+  const [lastPhillQuote, setLastPhillQuote] = useState(null)
   const inputRef = useRef(null)
   const terminalRef = useRef(null)
   const audioRef = useRef(null)
   const typingTimeoutRef = useRef(null)
+
+  // Array of Phill quotes
+  const allPhillQuotes = [
+    '"Bean or not to Bean?" – William Milkshake',
+    '"I play, therefore i\'m gamer" – René Des Cart',
+    '"In the middle of a ranked, you can\'t pause the game" – Alberto felipe',
+    '"That match does not makes you lose, gives you trophies" – Frederico Nice\'she',
+    '"I have a dog." – Martin Leather Queen RJ',
+    '"Power... Is power :O" – Francis Bacon',
+    '"The journey of a thousand steps begins with a mile" – Lime TCG',
+    '"Time is honey" – Benjaminas Francisco',
+    '"You get 100% of the shots you don\'t take, correctly." – Wine Great\'zky',
+    '"Success is not fatal, failure is not final: It is ChatGPT, that counts." – Win is a ton Church chill',
+    '"Heaven is other people." – Jeens-Peel Sorte',
+    '"All those who don\'t wander are found." – JJk Toltec'
+  ]
+
+  // Function to get a random Phill quote without repeating
+  const getRandomPhillQuote = () => {
+    let availableQuotes = [...phillQuotes]
+    
+    // If no quotes available or cycle is complete, reset with all quotes
+    if (availableQuotes.length === 0) {
+      availableQuotes = [...allPhillQuotes]
+    }
+    
+    // If there's a last quote and multiple options, remove it to avoid repetition
+    if (lastPhillQuote && availableQuotes.length > 1) {
+      availableQuotes = availableQuotes.filter(quote => quote !== lastPhillQuote)
+    }
+    
+    // Get random quote from available options
+    const randomIndex = Math.floor(Math.random() * availableQuotes.length)
+    const selectedQuote = availableQuotes[randomIndex]
+    
+    // Update state: remove selected quote from cycle and set as last quote
+    const remainingQuotes = phillQuotes.filter(quote => quote !== selectedQuote)
+    setPhillQuotes(remainingQuotes)
+    setLastPhillQuote(selectedQuote)
+    
+    return selectedQuote
+  }
 
   // localStorage utility functions
   const saveUserData = (user, loginTime) => {
@@ -49,6 +93,9 @@ function App() {
 
   useEffect(() => {
     console.log('🚀 Component mounted')
+    // Initialize Phill quotes
+    setPhillQuotes([...allPhillQuotes])
+    
     // Check for existing user on mount
     const userData = loadUserData()
     if (userData.username) {
@@ -382,11 +429,47 @@ function App() {
         setTimeout(() => {
           setShowSandwich(false)
         }, 4000)
+      } else if (command === 'sudo rm -rf /' || command === 'sudo rm -rf /*') {
+        newOutput.push({ text: 'Your computer data is being deleted from your machine...', type: 'error' })
+        newOutput.push({ text: 'But chill your data has already found it\'s new owner😁', type: 'system' })
+        
+        // Set output first to show the messages
+        setOutput([...newOutput])
+        setInput('')
+        
+        // Close the website after 3 seconds
+        setTimeout(() => {
+          // Try multiple methods to "destroy" the page
+          document.body.innerHTML = '<div style="background: black; color: red; text-align: center; padding-top: 50vh; font-family: monospace; font-size: 24px;">SYSTEM DESTROYED<br/>Your computer data has been terminated</div>'
+          document.title = 'SYSTEM DESTROYED'
+          
+          // "Close" the website after showing destruction message
+          setTimeout(() => {
+            // Multiple methods to simulate closing/destroying the page
+            try {
+              // Try to close first
+              window.close()
+            } catch(e) {
+              // If that fails, do more aggressive methods
+            }
+            
+            // Redirect to blank page
+            window.location.replace('about:blank')
+            
+            // As backup, completely hide everything
+            document.documentElement.style.display = 'none'
+            
+            // And freeze the page
+            window.stop()
+          }, 2000)
+        }, 3000)
+        return // Return early to avoid setting output again
       } else if (command === 'help') {
         newOutput.push({ text: 'Available commands:', type: 'system' })
         newOutput.push({ text: '  help - show this super useful message🫠', type: 'system' })
         newOutput.push({ text: '  ls -la - List all projects', type: 'system' })
         newOutput.push({ text: '  skills - Show my skill levels (100% true. Trust💀)', type: 'system' })
+        newOutput.push({ text: '  phill - Get inspired by the greatest minds', type: 'system' })
         newOutput.push({ text: '  [project name] - Open the project URL', type: 'system' })
         newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
         newOutput.push({ text: '  login [username] - Login with a username', type: 'system' })
@@ -440,6 +523,11 @@ function App() {
         newOutput.push({ text: '  setmoney(amount) - to get some $$$ in the Doge clicker console', type: 'system' })
         newOutput.push({ text: '  earn.some rainbow culture() - and get a really cool rainbow skin in snake game', type: 'system' })
         newOutput.push({ text: '  lootBoxConsole.addItem("name", "rarity ", #);- to unlock any items in ancient loot box game', type: 'system' })
+      } else if (command === 'phill') {
+        const randomQuote = getRandomPhillQuote()
+        newOutput.push({ text: 'Quote of the moment:', type: 'system' })
+        newOutput.push({ text: '', type: 'system' })
+        newOutput.push({ text: randomQuote, type: 'system' })
       } else {
         // Check if command matches a project name
         const project = projects.find(p => p.name.toLowerCase() === command)
