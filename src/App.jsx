@@ -17,6 +17,25 @@ function App() {
   const [showExitText, setShowExitText] = useState(true)
   const [phillQuotes, setPhillQuotes] = useState([])
   const [lastPhillQuote, setLastPhillQuote] = useState(null)
+  
+  // Spaceship game states
+  const [gameActive, setGameActive] = useState(false)
+  const [showGameInstructions, setShowGameInstructions] = useState(false)
+  const [spaceshipPosition, setSpaceshipPosition] = useState({ x: 50, y: 90 }) // percentage based
+  const [lives, setLives] = useState(3)
+  const [debris, setDebris] = useState([])
+  const [gameStartTime, setGameStartTime] = useState(null)
+  const [showExplosion, setShowExplosion] = useState(false)
+  const [showVictoryMessage, setShowVictoryMessage] = useState(false)
+  
+  // Achievement system
+  const [achievements, setAchievements] = useState({
+    matrixEscape: false,    // Complete the spaceship game
+    sandwichMaster: false,  // Use sudo make me a sandwich
+    philosophySeeker: false // Use phill command
+  })
+  const [showAchievement, setShowAchievement] = useState(null)
+  
   const inputRef = useRef(null)
   const terminalRef = useRef(null)
   const audioRef = useRef(null)
@@ -85,16 +104,47 @@ function App() {
     localStorage.removeItem('terminal_username')
     localStorage.removeItem('terminal_last_login')
     localStorage.removeItem('terminal_command_history')
+    localStorage.removeItem('terminal_achievements')
   }
 
   const saveCommandHistory = (history) => {
     localStorage.setItem('terminal_command_history', JSON.stringify(history))
   }
 
+  // Achievement utility functions
+  const saveAchievements = (achievementData) => {
+    localStorage.setItem('terminal_achievements', JSON.stringify(achievementData))
+  }
+
+  const loadAchievements = () => {
+    const saved = localStorage.getItem('terminal_achievements')
+    return saved ? JSON.parse(saved) : {
+      matrixEscape: false,
+      sandwichMaster: false,
+      philosophySeeker: false
+    }
+  }
+
+  const unlockAchievement = (achievementKey, title, description) => {
+    if (!achievements[achievementKey]) {
+      const newAchievements = { ...achievements, [achievementKey]: true }
+      setAchievements(newAchievements)
+      saveAchievements(newAchievements)
+      
+      // Show achievement notification
+      setShowAchievement({ title, description })
+      setTimeout(() => setShowAchievement(null), 2500)
+    }
+  }
+
   useEffect(() => {
     console.log('🚀 Component mounted')
     // Initialize Phill quotes
     setPhillQuotes([...allPhillQuotes])
+    
+    // Load achievements
+    const savedAchievements = loadAchievements()
+    setAchievements(savedAchievements)
     
     // Check for existing user on mount
     const userData = loadUserData()
@@ -147,15 +197,33 @@ function App() {
           console.log('ESC - closing Matrix')
           setShowMatrix(false)
           setShowExitText(true) // Reset exit text for next time
+          // Reset game state
+          setGameActive(false)
+          setShowGameInstructions(false)
+          setSpaceshipPosition({ x: 50, y: 90 })
+          setLives(3)
+          setDebris([])
+          setGameStartTime(null)
+          setShowExplosion(false)
+          setShowVictoryMessage(false)
           return
         }
         
-        // WASD game controls - prevent default to stop any input interference
-        if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
-          e.preventDefault()
-          console.log(`WASD pressed: ${e.key} - ready for game logic!`)
-          // TODO: Add your game logic here
-          // Example: handleGameMovement(e.key)
+        // Spaceship game controls
+        if (gameActive) {
+          if (['a', 'A', 'ArrowLeft'].includes(e.key)) {
+            e.preventDefault()
+            setSpaceshipPosition(prev => ({ 
+              ...prev, 
+              x: Math.max(5, prev.x - 3) // Move left, min 5%
+            }))
+          } else if (['d', 'D', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault()
+            setSpaceshipPosition(prev => ({ 
+              ...prev, 
+              x: Math.min(95, prev.x + 3) // Move right, max 95%
+            }))
+          }
         }
         
         // Prevent any other keys from doing terminal stuff while in matrix
@@ -171,17 +239,253 @@ function App() {
         setShowExitText(false)
       }, 6000)
       
+      // Show game instructions after ALL letters finish falling
+      // "Welcome to the Matrix" = 18 chars, last letter starts at 17s, takes 3s to fall = 20s total
+      const instructionsTimer = setTimeout(() => {
+        setShowGameInstructions(true)
+      }, 20000)
+      
+      // Start the actual game after instructions are shown (23 seconds total)
+      const gameStartTimer = setTimeout(() => {
+        setGameActive(true)
+        setGameStartTime(Date.now())
+        
+        // Force immediate debris spawn when game starts
+        setTimeout(() => {
+          console.log('🟡 FORCE SPAWNING INITIAL DEBRIS')
+          setDebris(prevDebris => {
+            const initialDebris = []
+            for (let i = 0; i < 25; i++) { // Spawn 25 debris immediately (was 18)
+              initialDebris.push({
+                id: `initial_debris_${Date.now()}_${i}`,
+                x: Math.random() * 70 + 15,
+                y: Math.random() * 10 - 15, // Start at TOP only (-15 to -5)
+                rotation: Math.random() * 360,
+                rotationSpeed: (Math.random() - 0.5) * 4,
+                pattern: Math.random() > 0.5 ? 'striped' : 'checkered'
+              })
+            }
+            console.log('🟡 Force spawned debris:', initialDebris)
+            return initialDebris
+          })
+        }, 500) // 500ms after game starts
+      }, 23000)
+      
       return () => {
         document.removeEventListener('keydown', handleMatrixKeys)
         clearTimeout(exitTextTimer)
+        clearTimeout(instructionsTimer)
+        clearTimeout(gameStartTimer)
       }
     }
 
     return () => {
       document.removeEventListener('keydown', handleMatrixKeys)
     }
-  }, [showMatrix])
+  }, [showMatrix, gameActive])
   
+  // Spaceship automatic movement (upward)
+  useEffect(() => {
+    if (gameActive && gameStartTime && !showVictoryMessage) {
+      const moveInterval = setInterval(() => {
+        setSpaceshipPosition(prev => {
+          const newY = prev.y - 0.4 // Move up faster (~20 seconds to reach top)
+          
+          // Check if reached portal (much smaller hitbox - within 3% of portal center)
+          const portalY = 5 // Portal is at 5% from top
+          const portalX = 50 // Portal is at 50% from left
+          const distanceToPortal = Math.sqrt(
+            Math.pow(prev.x - portalX, 2) + Math.pow(newY - portalY, 2)
+          )
+          
+          if (distanceToPortal < 5) { // Much smaller hitbox
+            // Victory! Show escape message then exit matrix
+            setShowVictoryMessage(true)
+            setGameActive(false) // Stop the game immediately
+            
+            // Unlock achievement
+            unlockAchievement('matrixEscape', '🚀 Matrix Escapist', 'Successfully escaped the Matrix realm!')
+            
+            // Exit matrix after showing message for 3 seconds
+            setTimeout(() => {
+              setShowMatrix(false)
+              setShowGameInstructions(false)
+              setSpaceshipPosition({ x: 50, y: 90 })
+              setLives(3)
+              setDebris([])
+              setGameStartTime(null)
+              setShowVictoryMessage(false)
+            }, 3000)
+            
+            return { x: prev.x, y: newY }
+          }
+          
+          return { ...prev, y: newY }
+        })
+      }, 100) // Update every 100ms
+      
+      return () => clearInterval(moveInterval)
+    }
+  }, [gameActive, gameStartTime, showVictoryMessage])
+  
+  // Debris spawning system
+  useEffect(() => {
+    if (gameActive && !showVictoryMessage) {
+      console.log('🟡 Debris spawning system activated')
+      
+      const spawnDebris = () => {
+        console.log('🟡 Attempting to spawn debris...')
+        setDebris(prevDebris => {
+          // Remove debris that have fallen off screen
+          const activeDebris = prevDebris.filter(d => d.y < 110)
+          
+          console.log('🟡 Current debris count:', activeDebris.length)
+          
+          // Always spawn if we have less than 40 debris
+          if (activeDebris.length >= 40) {
+            console.log('🟡 Max 40 debris reached, not spawning')
+            return activeDebris
+          }
+          
+          // Spawn 7 new debris at random x positions
+          const newDebris = []
+          for (let i = 0; i < 7; i++) {
+            const debrisObj = {
+              id: `debris_${Date.now()}_${Math.random()}_${i}`, // Better unique ID
+              x: Math.random() * 70 + 15, // Random x between 15% and 85%
+              y: Math.random() * 10 - 15, // Start at TOP only (-15 to -5)
+              rotation: Math.random() * 360,
+              rotationSpeed: (Math.random() - 0.5) * 4, // Random rotation speed
+              pattern: Math.random() > 0.5 ? 'striped' : 'checkered' // Random pattern
+            }
+            newDebris.push(debrisObj)
+            console.log('🟡 Created debris:', debrisObj)
+          }
+          
+          const finalDebris = [...activeDebris, ...newDebris]
+          console.log('🟡 Final debris array length:', finalDebris.length)
+          console.log('🟡 Final debris array:', finalDebris)
+          return finalDebris
+        })
+      }
+      
+      // Spawn initial debris immediately
+      console.log('🟡 Initial debris spawn')
+      spawnDebris()
+      
+      // Then spawn every 3 seconds
+      const spawnInterval = setInterval(() => {
+        console.log('🟡 Interval debris spawn')
+        spawnDebris()
+      }, 3000)
+      
+      return () => {
+        console.log('🟡 Cleaning up debris spawning')
+        clearInterval(spawnInterval)
+      }
+    }
+  }, [gameActive, showVictoryMessage])
+  
+  // Debris movement (separate from collision detection)
+  useEffect(() => {
+    if (gameActive && !showVictoryMessage) {
+      const moveInterval = setInterval(() => {
+        setDebris(prevDebris => {
+          if (prevDebris.length === 0) return prevDebris
+          
+          const movedDebris = prevDebris
+            .map(d => ({
+              ...d,
+              y: d.y + 1.2, // Faster fall speed so they're more visible
+              rotation: d.rotation + d.rotationSpeed
+            }))
+            .filter(d => d.y < 110) // Remove debris that fell off screen
+          
+          console.log('🔴 Moving debris, count:', movedDebris.length)
+          return movedDebris
+        })
+      }, 80) // Faster update rate
+      
+      return () => clearInterval(moveInterval)
+    }
+  }, [gameActive, showVictoryMessage])
+  
+  // Collision detection (separate from movement)
+  useEffect(() => {
+    if (gameActive && !showVictoryMessage) {
+      const collisionInterval = setInterval(() => {
+        setDebris(prevDebris => {
+          if (prevDebris.length === 0) return prevDebris
+          
+          // Check for collisions with current spaceship position
+          const currentShipX = spaceshipPosition.x
+          const currentShipY = spaceshipPosition.y
+          
+          const hitDebris = prevDebris.find(d => {
+            const distanceX = Math.abs(d.x - currentShipX)
+            const distanceY = Math.abs(d.y - currentShipY)
+            const collision = distanceX < 4 && distanceY < 4 // Reasonable hitbox
+            
+            if (collision) {
+              console.log('💥💥💥 COLLISION DETECTED! 💥💥💥')
+              console.log('Ship position:', currentShipX, currentShipY)
+              console.log('Debris position:', d.x, d.y)
+              console.log('Distance:', distanceX, distanceY)
+            }
+            
+            return collision
+          })
+          
+          if (hitDebris) {
+            // Show explosion effect
+            setShowExplosion(true)
+            setTimeout(() => setShowExplosion(false), 500)
+            
+            // Handle life loss and restart
+            setLives(prevLives => {
+              const newLives = prevLives - 1
+              console.log('💥 LIVES LOST! New lives:', newLives)
+              
+              if (newLives <= 0) {
+                // Game over - restart completely after explosion
+                setTimeout(() => {
+                  setGameActive(false)
+                  setShowGameInstructions(false)
+                  setSpaceshipPosition({ x: 50, y: 90 })
+                  setLives(3)
+                  setDebris([])
+                  setGameStartTime(null)
+                  // Restart the sequence
+                  setTimeout(() => {
+                    setShowGameInstructions(true)
+                    setTimeout(() => {
+                      setGameActive(true)
+                      setGameStartTime(Date.now())
+                    }, 3000)
+                  }, 1000)
+                }, 600)
+              } else {
+                // Reset position but keep lives after explosion
+                setTimeout(() => {
+                  setSpaceshipPosition({ x: 50, y: 90 })
+                }, 600)
+              }
+              
+              return newLives
+            })
+            
+            // Clear debris immediately on hit
+            return []
+          }
+          
+          return prevDebris
+        })
+      }, 50) // Check more frequently for better collision detection
+      
+      return () => clearInterval(collisionInterval)
+    }
+  }, [gameActive, showVictoryMessage, spaceshipPosition.x, spaceshipPosition.y])
+
   // Function to focus on the input field
   const focusInput = () => {
     console.log('🎯 focusInput called')
@@ -425,6 +729,10 @@ function App() {
       } else if (command === 'sudo make me a sandwich' || input.trim().toLowerCase() === 'sudo make me a sandwich') {
         newOutput.push({ text: 'Okay.', type: 'system' })
         setShowSandwich(true)
+        
+        // Unlock achievement
+        unlockAchievement('sandwichMaster', '🥪 Sandwich Master', 'Successfully used sudo powers for snacks!')
+        
         // Hide sandwich after 4 seconds
         setTimeout(() => {
           setShowSandwich(false)
@@ -470,10 +778,36 @@ function App() {
         newOutput.push({ text: '  ls -la - List all projects', type: 'system' })
         newOutput.push({ text: '  skills - Show my skill levels (100% true. Trust💀)', type: 'system' })
         newOutput.push({ text: '  phill - Get inspired by the greatest minds', type: 'system' })
+        newOutput.push({ text: '  achv - View your unlocked achievements', type: 'system' })
         newOutput.push({ text: '  [project name] - Open the project URL', type: 'system' })
         newOutput.push({ text: '  type "tips" to get tips for the games', type: 'system' })
         newOutput.push({ text: '  login [username] - Login with a username', type: 'system' })
         newOutput.push({ text: '  logout - Logout and clear user data', type: 'system' })
+      } else if (command === 'achv') {
+        newOutput.push({ text: 'Achievement Progress:', type: 'system' })
+        newOutput.push({ text: '', type: 'system' })
+        
+        const achievementList = [
+          { key: 'matrixEscape', icon: '🚀', title: 'Matrix Escapist', desc: 'Successfully escape the Matrix realm' },
+          { key: 'sandwichMaster', icon: '🥪', title: 'Sandwich Master', desc: 'Use sudo powers for snacks' },
+          { key: 'philosophySeeker', icon: '🧠', title: 'Philosophy Seeker', desc: 'Seek wisdom from great minds' }
+        ]
+        
+        achievementList.forEach(achievement => {
+          const isUnlocked = achievements[achievement.key]
+          const status = isUnlocked ? '✅ UNLOCKED' : '🔒 LOCKED'
+          const title = isUnlocked ? achievement.title : '???'
+          const desc = isUnlocked ? achievement.desc : 'Complete the challenge to unlock'
+          
+          newOutput.push({ 
+            text: `  ${achievement.icon} ${title} - ${desc} [${status}]`, 
+            type: 'system' 
+          })
+        })
+        
+        const unlockedCount = Object.values(achievements).filter(Boolean).length
+        newOutput.push({ text: '', type: 'system' })
+        newOutput.push({ text: `Progress: ${unlockedCount}/3 achievements unlocked`, type: 'system' })
       } else if (command === 'logout') {
         clearUserData()
         setUsername('')
@@ -481,6 +815,7 @@ function App() {
         setLastLogin(null)
         setCommandHistory([])
         setHistoryIndex(-1)
+        setAchievements({ matrixEscape: false, sandwichMaster: false, philosophySeeker: false })
         newOutput.push({ text: 'Logged out successfully.', type: 'system' })
         newOutput.push({ text: 'Please login to continue.', type: 'system' })
         newOutput.push({ text: 'Usage: login [username]', type: 'system' })
@@ -528,6 +863,9 @@ function App() {
         newOutput.push({ text: 'Quote of the moment:', type: 'system' })
         newOutput.push({ text: '', type: 'system' })
         newOutput.push({ text: randomQuote, type: 'system' })
+        
+        // Unlock achievement
+        unlockAchievement('philosophySeeker', '🧠 Philosophy Seeker', 'Sought wisdom from the great minds!')
       } else {
         // Check if command matches a project name
         const project = projects.find(p => p.name.toLowerCase() === command)
@@ -638,10 +976,20 @@ function App() {
           </div>
         </div>
       )}
+      {showAchievement && (
+        <div className={`achievement-overlay ${showAchievement.title.includes('Sandwich') ? 'achievement-bottom' : ''}`}>
+          <div className="achievement-notification">
+            <div className="achievement-header">🏆 ACHIEVEMENT UNLOCKED!</div>
+            <div className="achievement-title">{showAchievement.title}</div>
+            <div className="achievement-description">{showAchievement.description}</div>
+          </div>
+        </div>
+      )}
       {showMatrix && (
         <div className="matrix-overlay">
           <div className="matrix-container">
-            {Array.from({ length: 80 }, (_, i) => (
+            {/* Only show matrix rain if game is not active (for performance) */}
+            {!gameActive && Array.from({ length: 80 }, (_, i) => (
               <div key={i} className="matrix-column" style={{ left: `${i * 1.5}%` }}>
                 {Array.from({ length: 50 }, (_, j) => (
                   <span key={j} className="matrix-char" style={{ 
@@ -653,22 +1001,164 @@ function App() {
                 ))}
               </div>
             ))}
-            <div className="matrix-text">
-              <div className="falling-text">
-                {"Welcome to the Matrix".split('').map((char, index) => (
-                  <span 
-                    key={index} 
-                    className="falling-letter"
-                    style={{ 
-                      animationDelay: `${index * 1}s`,
-                      left: `${index * 20}px`
-                    }}
-                  >
-                    {char === ' ' ? '\u00A0' : char}
-                  </span>
+            
+            {/* Game UI Elements */}
+            {gameActive && (
+              <>
+                {/* Moving starfield background */}
+                <div className="starfield">
+                  {Array.from({ length: 100 }, (_, i) => (
+                    <div
+                      key={`star-${i}`}
+                      className="star"
+                      style={{
+                        left: `${Math.random() * 100}%`,
+                        animationDelay: `${Math.random() * 3}s`,
+                        animationDuration: `${2 + Math.random() * 4}s`,
+                        opacity: Math.random() * 0.8 + 0.2
+                      }}
+                    />
+                  ))}
+                </div>
+                
+                {/* Portal at the top */}
+                <div className="portal" style={{
+                  position: 'absolute',
+                  top: '5%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, #ff0000, #ff6666, #ff0000)',
+                  animation: 'portal-spin 2s linear infinite',
+                  boxShadow: '0 0 20px #ff0000, 0 0 40px #ff0000',
+                  zIndex: '10001'
+                }} />
+                
+                {/* Spaceship */}
+                <div className="spaceship" style={{
+                  position: 'absolute',
+                  left: `${spaceshipPosition.x}%`,
+                  top: `${spaceshipPosition.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: '24px',
+                  zIndex: '10001',
+                  textShadow: showExplosion ? '0 0 20px #ff0000, 0 0 40px #ff0000' : '0 0 10px #ffff00',
+                  animation: showExplosion ? 'explosion-shake 0.5s ease-in-out' : 'none'
+                }}>
+                  {showExplosion ? '💥' : '🚀'}
+                </div>
+                
+                {/* Debris */}
+                {debris.map(d => (
+                  <div key={d.id} className="debris" style={{
+                    position: 'absolute',
+                    left: `${d.x}%`,
+                    top: `${d.y}%`,
+                    transform: `translate(-50%, -50%) rotate(${d.rotation}deg)`,
+                    width: '60px', // Bigger debris for better visibility
+                    height: '60px',
+                    zIndex: '10000',
+                    background: d.pattern === 'striped' 
+                      ? 'repeating-linear-gradient(45deg, #000000 0px, #000000 8px, #ffff00 8px, #ffff00 16px)'
+                      : 'repeating-conic-gradient(#000000 0% 25%, #ffff00 25% 50%)',
+                    borderRadius: '8px',
+                    boxShadow: '0 0 15px rgba(255, 255, 0, 1), 0 0 25px rgba(255, 255, 0, 0.5)',
+                    border: '3px solid #ffff00',
+                    opacity: '0.9'
+                  }} />
                 ))}
-              </div>
-              {showExitText && <div className="exit-text">Press ESC to exit</div>}
+                
+                {/* Debug info */}
+                {gameActive && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '60px',
+                    right: '20px',
+                    color: '#00ff00',
+                    fontSize: '12px',
+                    fontFamily: 'Courier New, monospace',
+                    textShadow: '0 0 5px #00ff00',
+                    zIndex: '10002',
+                    textAlign: 'right'
+                  }}>
+                    <div>Debris: {debris.length}/40</div>
+                    <div>Ship: {spaceshipPosition.x.toFixed(1)}, {spaceshipPosition.y.toFixed(1)}</div>
+                    <div>Portal: 50.0, 5.0</div>
+                    {debris.length > 0 && (
+                      <div>
+                        Closest: {Math.min(...debris.map(d => 
+                          Math.sqrt(Math.pow(d.x - spaceshipPosition.x, 2) + Math.pow(d.y - spaceshipPosition.y, 2))
+                        )).toFixed(1)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Lives Display */}
+                <div className="lives-display" style={{
+                  position: 'absolute',
+                  top: '20px',
+                  right: '20px',
+                  color: '#00ff00',
+                  fontSize: '18px',
+                  fontFamily: 'Courier New, monospace',
+                  textShadow: '0 0 10px #00ff00',
+                  zIndex: '10002'
+                }}>
+                  Lives: {'❤️'.repeat(lives)}
+                </div>
+              </>
+            )}
+            
+            <div className="matrix-text">
+              {!showGameInstructions && !gameActive && !showVictoryMessage && (
+                <div className="falling-text">
+                  {"Welcome to the Matrix".split('').map((char, index) => (
+                    <span 
+                      key={index} 
+                      className="falling-letter"
+                      style={{ 
+                        animationDelay: `${index * 1}s`,
+                        left: `${index * 20}px`
+                      }}
+                    >
+                      {char === ' ' ? '\u00A0' : char}
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              {showGameInstructions && !gameActive && !showVictoryMessage && (
+                <div className="game-instructions">
+                  <div style={{ marginBottom: '20px', fontSize: '20px' }}>
+                    You have been locked into the Matrix realm.
+                  </div>
+                  <div style={{ marginBottom: '20px', fontSize: '20px' }}>
+                    Get to the portal to escape!
+                  </div>
+                  <div style={{ fontSize: '16px', opacity: '0.8' }}>
+                    Move with ← and →, or A D
+                  </div>
+                </div>
+              )}
+              
+              {showVictoryMessage && (
+                <div className="victory-message" style={{
+                  textAlign: 'center',
+                  fontSize: '24px',
+                  color: '#00ff00',
+                  textShadow: '0 0 20px #00ff00, 0 0 40px #00ff00',
+                  animation: 'matrix-glow 1s ease-in-out infinite alternate'
+                }}>
+                  <div style={{ marginBottom: '20px' }}>🎉 VICTORY! 🎉</div>
+                  <div>You've escaped the matrix,</div>
+                  <div>go tell the world!</div>
+                </div>
+              )}
+              
+              {showExitText && !gameActive && !showVictoryMessage && <div className="exit-text">Press ESC to exit</div>}
             </div>
           </div>
         </div>
